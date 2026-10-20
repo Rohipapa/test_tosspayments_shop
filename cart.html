@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>장바구니 | MOOSIN STORE</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-category="cart">
+  <header id="header"></header>
+
+  <main class="inner">
+    <div class="page-head"><h1>장바구니</h1></div>
+    <div id="cart"></div>
+  </main>
+
+  <footer id="footer"></footer>
+
+  <script src="js/products.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    (function () {
+      const root = $("#cart");
+
+      function render() {
+        const items = Cart.items();
+        if (!items.length) {
+          root.innerHTML = `<div class="empty"><strong>장바구니에 담긴 상품이 없어요</strong><p>마음에 드는 상품을 담아보세요.</p><a class="btn btn--black" href="index.html">쇼핑하러 가기</a></div>`;
+          return;
+        }
+
+        const checked = items.filter((i) => i.checked);
+        const t = calcTotals(checked);
+        const allChecked = checked.length === items.length;
+
+        root.innerHTML = `
+          <div class="order">
+            <div class="box">
+              <div class="box__head">
+                <label class="check"><input type="checkbox" id="checkAll" ${allChecked ? "checked" : ""}> 전체 선택 (${checked.length}/${items.length})</label>
+                <button type="button" class="btn btn--sm" id="delChecked">선택 삭제</button>
+              </div>
+              <ul>
+                ${items.map((i, idx) => {
+                  const p = getProduct(i.id);
+                  if (!p) return "";
+                  return `
+                    <li class="line-item">
+                      <input type="checkbox" class="check" data-check="${idx}" ${i.checked ? "checked" : ""} aria-label="선택" style="width:18px;height:18px;accent-color:#000">
+                      <a class="line-item__img" href="product.html?id=${p.id}"><img src="${productImage(p)}" alt=""></a>
+                      <div>
+                        <p class="line-item__brand">${p.brand}</p>
+                        <p class="line-item__name">${p.name}</p>
+                        <p class="line-item__opt">사이즈 ${i.size}</p>
+                        <div class="line-item__ctrl">
+                          <div class="qty">
+                            <button type="button" data-dec="${idx}" aria-label="수량 빼기">−</button>
+                            <input type="number" value="${i.qty}" data-qty="${idx}" min="1" max="99" aria-label="수량">
+                            <button type="button" data-inc="${idx}" aria-label="수량 더하기">+</button>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="line-item__right">
+                        ${p.sale ? `<del style="display:block;text-align:inherit;font-size:12px;color:#888">${won(p.price * i.qty)}</del>` : ""}
+                        <p class="line-item__price">${won(salePrice(p) * i.qty)}</p>
+                        <button type="button" class="line-item__del" data-del="${idx}">삭제</button>
+                      </div>
+                    </li>`;
+                }).join("")}
+              </ul>
+            </div>
+
+            <aside class="box summary">
+              <div class="box__head">결제 예정 금액</div>
+              <div class="box__body">
+                <dl>
+                  <dt>상품 금액</dt><dd>${won(t.original)}</dd>
+                  <dt>할인 금액</dt><dd style="color:#ff0000">-${won(t.discount)}</dd>
+                  <dt>배송비</dt><dd>${t.shipping ? won(t.shipping) : "무료"}</dd>
+                </dl>
+                <div class="grand"><span>합계</span><strong>${won(t.total)}</strong></div>
+                <p class="note">${won(FREE_SHIPPING_OVER)} 이상 구매 시 무료배송</p>
+                <button type="button" class="btn btn--black btn--block" id="order" ${checked.length ? "" : "disabled"}>${won(t.total)} 구매하기</button>
+              </div>
+            </aside>
+          </div>`;
+      }
+
+      function update(fn) {
+        const items = Cart.items();
+        fn(items);
+        Cart.save(items);
+        render();
+      }
+
+      root.addEventListener("click", (e) => {
+        const d = e.target.dataset;
+        if (d.inc) update((items) => { items[d.inc].qty = Math.min(99, items[d.inc].qty + 1); });
+        else if (d.dec) update((items) => { items[d.dec].qty = Math.max(1, items[d.dec].qty - 1); });
+        else if (d.del) update((items) => { items.splice(d.del, 1); });
+        else if (e.target.id === "delChecked") {
+          if (!Cart.items().some((i) => i.checked)) return toast("삭제할 상품을 선택해 주세요");
+          update((items) => { items.splice(0, items.length, ...items.filter((i) => !i.checked)); });
+        } else if (e.target.id === "order") {
+          const sel = Cart.items().filter((i) => i.checked).map(({ id, size, qty }) => ({ id, size, qty }));
+          Checkout.set(sel, "cart");
+          location.href = "checkout.html";
+        }
+      });
+
+      root.addEventListener("change", (e) => {
+        const d = e.target.dataset;
+        if (e.target.id === "checkAll") update((items) => items.forEach((i) => (i.checked = e.target.checked)));
+        else if (d.check) update((items) => { items[d.check].checked = e.target.checked; });
+        else if (d.qty) update((items) => { items[d.qty].qty = Math.min(99, Math.max(1, parseInt(e.target.value, 10) || 1)); });
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>

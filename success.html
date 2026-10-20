@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>결제 완료 | MOOSIN STORE</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="header"></header>
+
+  <main class="result" id="result"></main>
+
+  <footer id="footer"></footer>
+
+  <script src="js/products.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    /* ==========================================================
+       결제 성공 (successUrl)
+       토스페이먼츠가 ?paymentType=&orderId=&paymentKey=&amount= 를 붙여서 리다이렉트합니다.
+
+       ⚠ 여기까지 왔다고 결제가 끝난 게 아닙니다.
+       10분 안에 "서버"에서 결제 승인 API를 호출해야 결제가 확정됩니다.
+       승인 API는 시크릿 키가 필요하므로 브라우저(HTML/JS)에서 호출하면 안 됩니다.
+
+       서버 예시 (Node.js):
+         const auth = "Basic " + Buffer.from(SECRET_KEY + ":").toString("base64");
+         await fetch("https://api.tosspayments.com/v1/payments/confirm", {
+           method: "POST",
+           headers: { Authorization: auth, "Content-Type": "application/json" },
+           body: JSON.stringify({ paymentKey, orderId, amount }),
+         });
+       ========================================================== */
+    (function () {
+      const q = new URLSearchParams(location.search);
+      const orderId = q.get("orderId");
+      const paymentKey = q.get("paymentKey");
+      const amount = Number(q.get("amount"));
+      const pending = store.get("moosin_pending_order", null);
+
+      // 결제 요청 때 저장한 금액과 리다이렉트로 받은 금액이 같은지 확인 (금액 위변조 방지)
+      const valid = pending && pending.orderId === orderId && pending.amount === amount && paymentKey;
+
+      if (!valid) {
+        $("#result").innerHTML = `
+          <div class="result__icon result__icon--fail">!</div>
+          <h1>결제 정보를 확인할 수 없어요</h1>
+          <p>주문 정보가 없거나 결제 금액이 일치하지 않습니다.</p>
+          <dl><dt>주문번호</dt><dd>${orderId || "-"}</dd><dt>결제 금액</dt><dd>${amount ? won(amount) : "-"}</dd></dl>
+          <div class="btn-row"><a class="btn" href="cart.html">장바구니</a><a class="btn btn--black" href="index.html">홈으로</a></div>`;
+        return;
+      }
+
+      // 장바구니에서 주문한 상품은 장바구니에서 제거
+      if (pending.from === "cart") {
+        const bought = pending.items.map((i) => i.id + "|" + i.size);
+        Cart.save(Cart.items().filter((i) => !bought.includes(i.id + "|" + i.size)));
+      }
+      Checkout.clear();
+      store.remove("moosin_pending_order");
+
+      $("#result").innerHTML = `
+        <div class="result__icon">✓</div>
+        <h1>결제가 완료되었어요</h1>
+        <p>주문해 주셔서 감사합니다.</p>
+        <dl>
+          <dt>주문번호</dt><dd>${orderId}</dd>
+          <dt>주문 상품</dt><dd>${pending.orderName}</dd>
+          <dt>결제 금액</dt><dd>${won(amount)}</dd>
+          <dt>결제 수단</dt><dd>${q.get("paymentType") || "-"}</dd>
+          <dt>paymentKey</dt><dd>${paymentKey}</dd>
+        </dl>
+        <p class="test-notice" style="text-align:left">퍼블리싱 버전이라 결제 승인 API(서버)는 호출하지 않았어요. 실서비스에서는 이 단계에서 서버가 승인 요청을 보내야 결제가 확정됩니다.</p>
+        <div class="btn-row"><a class="btn" href="index.html">쇼핑 계속하기</a><a class="btn btn--black" href="cart.html">장바구니</a></div>`;
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOOSIN STORE</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="header"></header>
+
+  <main>
+    <section class="banner" id="banner"></section>
+
+    <div class="inner" id="sections"></div>
+  </main>
+
+  <footer id="footer"></footer>
+
+  <script src="js/products.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    const BANNERS = [
+      { cat: "tops",  id: "t01", title: "가볍게 걸치는\n헤비웨이트 티셔츠", sub: "상의 랭킹 최대 45% 할인" },
+      { cat: "pants", id: "p02", title: "한 벌로 끝내는\n데일리 슬랙스",     sub: "바지 베스트 모음" },
+      { cat: "shoes", id: "s07", title: "가을 시즌\n부츠 · 로퍼 기획전",     sub: "신발 단독 상품 특가" },
+    ];
+
+    $("#banner").innerHTML = BANNERS.map((b) => `
+      <a class="banner__item" href="${CATEGORIES[b.cat].page}">
+        <img src="${productImage(getProduct(b.id))}" alt="">
+        <div class="banner__text">
+          <strong>${b.title.replace("\n", "<br>")}</strong>
+          <span>${b.sub}</span>
+        </div>
+      </a>`).join("");
+
+    $("#sections").innerHTML = Object.entries(CATEGORIES).map(([key, c]) => {
+      const top = PRODUCTS.filter((p) => p.cat === key)
+        .sort((a, b) => b.review - a.review)
+        .slice(0, 5);
+      return `
+        <section class="section">
+          <div class="section__head">
+            <h2 class="section__title">${c.name} 랭킹</h2>
+            <a class="section__more" href="${c.page}">전체보기 &gt;</a>
+          </div>
+          <div class="grid">${top.map((p, i) => productCard(p, i + 1)).join("")}</div>
+        </section>`;
+    }).join("");
+  </script>
+</body>
+</html>

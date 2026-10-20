@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>결제 실패 | MOOSIN STORE</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="header"></header>
+
+  <main class="result" id="result"></main>
+
+  <footer id="footer"></footer>
+
+  <script src="js/products.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    /* 결제 실패 (failUrl) — ?code=&message=&orderId= 가 붙어서 들어옵니다. */
+    (function () {
+      const q = new URLSearchParams(location.search);
+      const esc = (s) => String(s || "-").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+      store.remove("moosin_pending_order");
+
+      $("#result").innerHTML = `
+        <div class="result__icon result__icon--fail">✕</div>
+        <h1>결제에 실패했어요</h1>
+        <p>${esc(q.get("message") || "결제가 정상적으로 처리되지 않았습니다.")}</p>
+        <dl>
+          <dt>에러 코드</dt><dd>${esc(q.get("code"))}</dd>
+          <dt>주문번호</dt><dd>${esc(q.get("orderId"))}</dd>
+        </dl>
+        <div class="btn-row"><a class="btn" href="cart.html">장바구니</a><a class="btn btn--black" href="checkout.html">다시 결제하기</a></div>`;
+    })();
+  </script>
+</body>
+</html>
