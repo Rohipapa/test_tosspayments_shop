@@ -20,7 +20,7 @@ powershell -ExecutionPolicy Bypass -File serve.ps1
 
 - Node.js, Python(실제 실행 파일)이 없습니다. `npx`가 필요한 `.mcp.json`의 토스페이먼츠 MCP 서버(`tosspayments-integration-guide`)는 Node.js를 설치하기 전까지 연결되지 않습니다.
 - Git은 PATH에 등록되지 않은 포터블 MinGit을 씁니다. 경로는 `$env:LOCALAPPDATA\Programs\MinGit\cmd\git.exe`이고, `& $g <명령>` 형태로 호출합니다.
-- MinGit에는 credential manager가 없어서 `git push`를 하려면 사용자가 터미널에서 직접 GitHub 로그인을 해야 합니다. 비대화형 셸에서 푸시하면 실패합니다.
+- `credential.helper=manager`가 설정되어 있고 GitHub 인증 정보도 저장되어 있어서 비대화형 셸에서도 `git push`가 됩니다. 인증이 만료되어 로그인 창이 필요하면, 사용자 터미널 탭에서 푸시를 실행해 사용자가 직접 로그인하게 합니다.
 - 원격 저장소는 `origin` = https://github.com/Rohipapa/test_tosspayments_shop.git (`main` 브랜치)입니다.
 
 ## 아키텍처
