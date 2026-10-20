@@ -40,12 +40,14 @@ ul, ol { list-style: none; }
 .header__top { display: flex; align-items: center; gap: 24px; height: 60px; }
 .logo { font-size: 26px; font-weight: 900; letter-spacing: -1px; white-space: nowrap; }
 .search {
-  flex: 1; max-width: 480px; display: flex; align-items: center;
+  flex: 1; min-width: 0; max-width: 480px; display: flex; align-items: center;
   background: #2b2b2b; border-radius: 4px; padding: 0 12px; height: 38px;
 }
-.search input { flex: 1; background: none; border: 0; outline: 0; color: var(--white); }
+/* input의 기본 최소 너비 때문에 검색창이 줄지 않고 오른쪽 링크가 세로로 깨지지 않도록 */
+.search input { flex: 1; min-width: 0; width: 100%; background: none; border: 0; outline: 0; color: var(--white); }
+.search svg { flex-shrink: 0; }
 .search input::placeholder { color: #8c8c8c; }
-.header__util { margin-left: auto; display: flex; gap: 18px; font-size: 13px; }
+.header__util { margin-left: auto; display: flex; flex-shrink: 0; gap: 18px; font-size: 13px; white-space: nowrap; }
 .header__util a { display: flex; align-items: center; gap: 4px; color: #d0d0d0; }
 .header__util a:hover, .header__util a.is-active { color: var(--white); font-weight: 700; }
 .cart-badge {
@@ -314,6 +316,7 @@ ul, ol { list-style: none; }
   .header__top { gap: 12px; height: 54px; }
   .logo { font-size: 21px; }
   .search { height: 34px; }
+  .header__util { gap: 12px; }
   .header__util .hide-m { display: none; }
   .gnb ul { gap: 20px; }
   .grid, .grid--4 { grid-template-columns: repeat(2, 1fr); gap: 24px 8px; }
