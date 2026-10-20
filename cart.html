@@ -16,6 +16,8 @@
 
   <footer id="footer"></footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.100.0/dist/umd/supabase.js"></script>
+  <script src="js/supabase.js"></script>
   <script src="js/products.js"></script>
   <script src="js/common.js"></script>
   <script>
@@ -23,7 +25,8 @@
       const root = $("#cart");
 
       function render() {
-        const items = Cart.items();
+        // 판매 종료 등으로 조회되지 않는 상품은 목록에서 숨김
+        const items = Cart.items().filter((i) => Products.cached(i.id));
         if (!items.length) {
           root.innerHTML = `<div class="empty"><strong>장바구니에 담긴 상품이 없어요</strong><p>마음에 드는 상품을 담아보세요.</p><a class="btn btn--black" href="index.html">쇼핑하러 가기</a></div>`;
           return;
@@ -41,17 +44,17 @@
                 <button type="button" class="btn btn--sm" id="delChecked">선택 삭제</button>
               </div>
               <ul>
-                ${items.map((i, idx) => {
-                  const p = getProduct(i.id);
-                  if (!p) return "";
+                ${items.map((i) => {
+                  const p = Products.cached(i.id);
+                  const idx = esc(cartKey(i));
                   return `
                     <li class="line-item">
                       <input type="checkbox" class="check" data-check="${idx}" ${i.checked ? "checked" : ""} aria-label="선택" style="width:18px;height:18px;accent-color:#000">
                       <a class="line-item__img" href="product.html?id=${p.id}"><img src="${productImage(p)}" alt=""></a>
                       <div>
-                        <p class="line-item__brand">${p.brand}</p>
-                        <p class="line-item__name">${p.name}</p>
-                        <p class="line-item__opt">사이즈 ${i.size}</p>
+                        <p class="line-item__brand">${esc(p.brand)}</p>
+                        <p class="line-item__name">${esc(p.name)}</p>
+                        <p class="line-item__opt">사이즈 ${esc(i.size)}</p>
                         <div class="line-item__ctrl">
                           <div class="qty">
                             <button type="button" data-dec="${idx}" aria-label="수량 빼기">−</button>
@@ -86,23 +89,24 @@
           </div>`;
       }
 
+      // 데이터 속성에는 "상품id|사이즈" 키를 넣어 둡니다. (화면 순서와 저장 순서가 달라도 안전)
       function update(fn) {
         const items = Cart.items();
-        fn(items);
-        Cart.save(items);
+        fn(items, (key) => items.find((i) => cartKey(i) === key));
+        Cart.save(items).catch(() => render());
         render();
       }
 
       root.addEventListener("click", (e) => {
         const d = e.target.dataset;
-        if (d.inc) update((items) => { items[d.inc].qty = Math.min(99, items[d.inc].qty + 1); });
-        else if (d.dec) update((items) => { items[d.dec].qty = Math.max(1, items[d.dec].qty - 1); });
-        else if (d.del) update((items) => { items.splice(d.del, 1); });
+        if (d.inc) update((items, find) => { const i = find(d.inc); i.qty = Math.min(MAX_QTY, i.qty + 1); });
+        else if (d.dec) update((items, find) => { const i = find(d.dec); i.qty = Math.max(1, i.qty - 1); });
+        else if (d.del) update((items) => { items.splice(items.findIndex((i) => cartKey(i) === d.del), 1); });
         else if (e.target.id === "delChecked") {
           if (!Cart.items().some((i) => i.checked)) return toast("삭제할 상품을 선택해 주세요");
           update((items) => { items.splice(0, items.length, ...items.filter((i) => !i.checked)); });
         } else if (e.target.id === "order") {
-          const sel = Cart.items().filter((i) => i.checked).map(({ id, size, qty }) => ({ id, size, qty }));
+          const sel = Cart.items().filter((i) => i.checked && Products.cached(i.id)).map(({ id, size, qty }) => ({ id, size, qty }));
           Checkout.set(sel, "cart");
           location.href = "checkout.html";
         }
@@ -111,11 +115,20 @@
       root.addEventListener("change", (e) => {
         const d = e.target.dataset;
         if (e.target.id === "checkAll") update((items) => items.forEach((i) => (i.checked = e.target.checked)));
-        else if (d.check) update((items) => { items[d.check].checked = e.target.checked; });
-        else if (d.qty) update((items) => { items[d.qty].qty = Math.min(99, Math.max(1, parseInt(e.target.value, 10) || 1)); });
+        else if (d.check) update((items, find) => { find(d.check).checked = e.target.checked; });
+        else if (d.qty) update((items, find) => { find(d.qty).qty = Math.min(MAX_QTY, Math.max(1, parseInt(e.target.value, 10) || 1)); });
       });
 
-      render();
+      async function load() {
+        await App.ready;
+        await Products.byIds(Cart.items().map((i) => i.id));
+        render();
+      }
+
+      withLoading(root, `<p class="loading">장바구니를 불러오는 중...</p>`, load);
+
+      // 로그인·로그아웃이나 저장 실패로 장바구니가 바뀌면 다시 그림
+      document.addEventListener("cart:change", () => withLoading(root, "", load));
     })();
   </script>
 </body>

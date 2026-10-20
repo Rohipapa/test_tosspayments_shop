@@ -15,97 +15,119 @@
 
   <footer id="footer"></footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.100.0/dist/umd/supabase.js"></script>
+  <script src="js/supabase.js"></script>
   <script src="js/products.js"></script>
   <script src="js/common.js"></script>
   <script>
     (function () {
       const id = new URLSearchParams(location.search).get("id");
-      const p = getProduct(id);
 
-      if (!p) {
-        $("#detail").innerHTML = `<div class="empty"><strong>상품을 찾을 수 없어요</strong><a class="btn btn--black" href="index.html">홈으로</a></div>`;
-        return;
+      function renderDetail(p) {
+        if (!p) {
+          $("#detail").innerHTML = `<div class="empty"><strong>상품을 찾을 수 없어요</strong><a class="btn btn--black" href="index.html">홈으로</a></div>`;
+          return;
+        }
+
+        document.body.dataset.category = p.cat;
+        renderHeader();
+        document.title = `${p.name} | MOOSIN STORE`;
+        const cat = CATEGORIES[p.cat];
+        const price = salePrice(p);
+
+        $("#detail").innerHTML = `
+          <div class="detail">
+            <div class="detail__img"><img src="${productImage(p)}" alt="${esc(p.name)}"></div>
+            <div>
+              <p class="breadcrumb"><a href="index.html">홈</a> &gt; <a href="${cat.page}">${cat.name}</a></p>
+              <a class="detail__brand" href="${cat.page}">${esc(p.brand)}</a>
+              <h1 class="detail__name">${esc(p.name)}</h1>
+              <p class="detail__rating"><span class="star">★★★★★</span> ${p.rating} · 후기 ${p.review.toLocaleString()}개</p>
+
+              <div class="detail__price">
+                ${p.sale ? `<del>${won(p.price)}</del>` : ""}
+                <p>${p.sale ? `<span class="sale">${p.sale}%</span>` : ""}${won(price)}</p>
+              </div>
+
+              <table class="info-table">
+                <tr><th>배송</th><td>${price >= FREE_SHIPPING_OVER ? "무료배송" : `${won(SHIPPING_FEE)} (${won(FREE_SHIPPING_OVER)} 이상 무료)`}<br>오늘 주문 시 내일 출고</td></tr>
+                <tr><th>적립</th><td>최대 ${won(Math.floor(price * 0.03))} (3%)</td></tr>
+                <tr><th>품번</th><td>${esc(p.id.toUpperCase())}-2026FW</td></tr>
+              </table>
+
+              <span class="opt-label">사이즈</span>
+              <div class="sizes" id="sizes">
+                ${(p.sizes || []).map((s) => `<button type="button" class="size" data-size="${esc(s.size)}" ${s.stock > 0 ? "" : "disabled title=\"품절\""}>${esc(s.size)}</button>`).join("")}
+              </div>
+
+              <span class="opt-label">수량</span>
+              <div class="qty">
+                <button type="button" id="minus" aria-label="수량 빼기">−</button>
+                <input type="number" id="qty" value="1" min="1" max="99" aria-label="수량">
+                <button type="button" id="plus" aria-label="수량 더하기">+</button>
+              </div>
+
+              <div class="total-row"><span>총 상품 금액</span><strong id="total">${won(price)}</strong></div>
+
+              <div class="btn-row btn-row--like">
+                <button type="button" class="btn btn--like ${Likes.has(p.id) ? "is-on" : ""}" data-like="${p.id}" aria-label="좋아요" aria-pressed="${Likes.has(p.id)}">${HEART}</button>
+                <button type="button" class="btn" id="addCart">장바구니</button>
+                <button type="button" class="btn btn--black" id="buyNow">구매하기</button>
+              </div>
+            </div>
+          </div>`;
+
+        let size = null;
+        const qtyInput = $("#qty");
+        const stockOf = () => (p.sizes || []).find((s) => s.size === size)?.stock ?? MAX_QTY;
+        const getQty = () => Math.min(MAX_QTY, stockOf(), Math.max(1, parseInt(qtyInput.value, 10) || 1));
+        const sync = () => { qtyInput.value = getQty(); $("#total").textContent = won(price * getQty()); };
+
+        $("#sizes").addEventListener("click", (e) => {
+          const b = e.target.closest("[data-size]");
+          if (!b || b.disabled) return;
+          size = b.dataset.size;
+          $$(".size").forEach((x) => x.classList.toggle("is-active", x === b));
+          sync();
+        });
+        $("#minus").onclick = () => { qtyInput.value = getQty() - 1; sync(); };
+        $("#plus").onclick = () => { qtyInput.value = getQty() + 1; sync(); };
+        qtyInput.onchange = sync;
+
+        const needSize = () => { if (!size) { toast("사이즈를 선택해 주세요"); return true; } return false; };
+
+        $("#addCart").onclick = async (e) => {
+          if (needSize()) return;
+          const btn = e.currentTarget;
+          btn.disabled = true;
+          try {
+            await Cart.add(p.id, size, getQty());
+            toast("장바구니에 담았어요");
+          } catch (err) {
+            console.error(err);
+            toast("장바구니에 담지 못했어요");
+          } finally {
+            btn.disabled = false;
+          }
+        };
+        $("#buyNow").onclick = () => {
+          if (needSize()) return;
+          Checkout.set([{ id: p.id, size, qty: getQty() }], "direct");
+          location.href = "checkout.html";
+        };
+
+        withLoading($("#related"), "", async () => {
+          const related = (await Products.list({ category: p.cat })).filter((x) => x.id !== p.id).slice(0, 5);
+          $("#related").innerHTML = `
+            <div class="section__head"><h2 class="section__title">같은 카테고리 추천 상품</h2><a class="section__more" href="${cat.page}">전체보기 &gt;</a></div>
+            <div class="grid">${related.map((x) => productCard(x)).join("")}</div>`;
+        });
       }
 
-      document.body.dataset.category = p.cat;
-      document.title = `${p.name} | MOOSIN STORE`;
-      const cat = CATEGORIES[p.cat];
-      const price = salePrice(p);
-
-      $("#detail").innerHTML = `
-        <div class="detail">
-          <div class="detail__img"><img src="${productImage(p)}" alt="${p.name}"></div>
-          <div>
-            <p class="breadcrumb"><a href="index.html">홈</a> &gt; <a href="${cat.page}">${cat.name}</a></p>
-            <a class="detail__brand" href="${cat.page}">${p.brand}</a>
-            <h1 class="detail__name">${p.name}</h1>
-            <p class="detail__rating"><span class="star">★★★★★</span> ${p.rating} · 후기 ${p.review.toLocaleString()}개</p>
-
-            <div class="detail__price">
-              ${p.sale ? `<del>${won(p.price)}</del>` : ""}
-              <p>${p.sale ? `<span class="sale">${p.sale}%</span>` : ""}${won(price)}</p>
-            </div>
-
-            <table class="info-table">
-              <tr><th>배송</th><td>${price >= FREE_SHIPPING_OVER ? "무료배송" : `${won(SHIPPING_FEE)} (${won(FREE_SHIPPING_OVER)} 이상 무료)`}<br>오늘 주문 시 내일 출고</td></tr>
-              <tr><th>적립</th><td>최대 ${won(Math.floor(price * 0.03))} (3%)</td></tr>
-              <tr><th>품번</th><td>${p.id.toUpperCase()}-2026FW</td></tr>
-            </table>
-
-            <span class="opt-label">사이즈</span>
-            <div class="sizes" id="sizes">
-              ${SIZES[p.cat].map((s) => `<button type="button" class="size" data-size="${s}">${s}</button>`).join("")}
-            </div>
-
-            <span class="opt-label">수량</span>
-            <div class="qty">
-              <button type="button" id="minus" aria-label="수량 빼기">−</button>
-              <input type="number" id="qty" value="1" min="1" max="99" aria-label="수량">
-              <button type="button" id="plus" aria-label="수량 더하기">+</button>
-            </div>
-
-            <div class="total-row"><span>총 상품 금액</span><strong id="total">${won(price)}</strong></div>
-
-            <div class="btn-row btn-row--like">
-              <button type="button" class="btn btn--like ${Likes.has(p.id) ? "is-on" : ""}" data-like="${p.id}" aria-label="좋아요" aria-pressed="${Likes.has(p.id)}">${HEART}</button>
-              <button type="button" class="btn" id="addCart">장바구니</button>
-              <button type="button" class="btn btn--black" id="buyNow">구매하기</button>
-            </div>
-          </div>
-        </div>`;
-
-      let size = null;
-      const qtyInput = $("#qty");
-      const getQty = () => Math.min(99, Math.max(1, parseInt(qtyInput.value, 10) || 1));
-      const sync = () => { qtyInput.value = getQty(); $("#total").textContent = won(price * getQty()); };
-
-      $("#sizes").addEventListener("click", (e) => {
-        const b = e.target.closest("[data-size]");
-        if (!b) return;
-        size = b.dataset.size;
-        $$(".size").forEach((x) => x.classList.toggle("is-active", x === b));
+      withLoading($("#detail"), `<div class="skeleton-detail"><div class="skeleton"></div><div class="skeleton"></div></div>`, async () => {
+        const [p] = await Promise.all([getProduct(id), App.ready]);
+        renderDetail(p);
       });
-      $("#minus").onclick = () => { qtyInput.value = getQty() - 1; sync(); };
-      $("#plus").onclick = () => { qtyInput.value = getQty() + 1; sync(); };
-      qtyInput.onchange = sync;
-
-      const needSize = () => { if (!size) { toast("사이즈를 선택해 주세요"); return true; } return false; };
-
-      $("#addCart").onclick = () => {
-        if (needSize()) return;
-        Cart.add(p.id, size, getQty());
-        toast("장바구니에 담았어요");
-      };
-      $("#buyNow").onclick = () => {
-        if (needSize()) return;
-        Checkout.set([{ id: p.id, size, qty: getQty() }], "direct");
-        location.href = "checkout.html";
-      };
-
-      const related = PRODUCTS.filter((x) => x.cat === p.cat && x.id !== p.id).slice(0, 5);
-      $("#related").innerHTML = `
-        <div class="section__head"><h2 class="section__title">같은 카테고리 추천 상품</h2><a class="section__more" href="${cat.page}">전체보기 &gt;</a></div>
-        <div class="grid">${related.map((x) => productCard(x)).join("")}</div>`;
     })();
   </script>
 </body>

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>로그인 | MOOSIN STORE</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-category="login">
+  <header id="header"></header>
+
+  <main class="inner">
+    <section class="auth">
+      <h1>로그인</h1>
+      <p>로그인하면 장바구니·좋아요·주문 내역을 어느 기기에서나 볼 수 있어요.</p>
+      <form id="loginForm" novalidate>
+        <div class="field"><label for="email">이메일</label><input id="email" type="email" autocomplete="email" placeholder="example@email.com"></div>
+        <div class="field"><label for="password">비밀번호</label><input id="password" type="password" autocomplete="current-password" placeholder="비밀번호"></div>
+        <p class="form-msg" id="msg" role="alert"></p>
+        <button type="submit" class="btn btn--black btn--block" id="submitBtn">로그인</button>
+      </form>
+      <div class="auth__links">
+        <a href="signup.html" id="signupLink">회원가입</a>
+        <a href="reset.html">비밀번호 재설정</a>
+      </div>
+    </section>
+  </main>
+
+  <footer id="footer"></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.100.0/dist/umd/supabase.js"></script>
+  <script src="js/supabase.js"></script>
+  <script src="js/products.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    (async function () {
+      const redirect = safeRedirect(new URLSearchParams(location.search).get("redirect"));
+      $("#signupLink").href = `signup.html?redirect=${encodeURIComponent(redirect)}`;
+
+      // 이미 로그인했으면 바로 이동
+      await Auth.ready;
+      if (Auth.user) return location.replace(redirect);
+
+      const msg = $("#msg");
+      $("#loginForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const email = $("#email").value.trim();
+        const password = $("#password").value;
+        if (!email || !password) {
+          msg.textContent = "이메일과 비밀번호를 입력해 주세요.";
+          return;
+        }
+        const btn = $("#submitBtn");
+        btn.disabled = true;
+        btn.textContent = "로그인 중...";
+        msg.textContent = "";
+
+        const { data, error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) {
+          msg.textContent =
+            error.code === "invalid_credentials" ? "이메일 또는 비밀번호가 맞지 않아요."
+            : error.code === "email_not_confirmed" ? "가입 확인 메일의 링크를 먼저 눌러 주세요."
+            : "로그인하지 못했어요. 잠시 후 다시 시도해 주세요.";
+          btn.disabled = false;
+          btn.textContent = "로그인";
+          return;
+        }
+        // 비로그인 때 담은 장바구니·좋아요를 계정으로 옮긴 뒤 이동 (F-305)
+        Auth.user = data.user;
+        await mergeLocalData();
+        location.replace(redirect);
+      });
+    })();
+  </script>
+</body>
+</html>

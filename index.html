@@ -17,6 +17,8 @@
 
   <footer id="footer"></footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.100.0/dist/umd/supabase.js"></script>
+  <script src="js/supabase.js"></script>
   <script src="js/products.js"></script>
   <script src="js/common.js"></script>
   <script>
@@ -26,28 +28,41 @@
       { cat: "shoes", id: "s07", title: "가을 시즌\n부츠 · 로퍼 기획전",     sub: "신발 단독 상품 특가" },
     ];
 
-    $("#banner").innerHTML = BANNERS.map((b) => `
-      <a class="banner__item" href="${CATEGORIES[b.cat].page}">
-        <img src="${productImage(getProduct(b.id))}" alt="">
-        <div class="banner__text">
-          <strong>${b.title.replace("\n", "<br>")}</strong>
-          <span>${b.sub}</span>
-        </div>
-      </a>`).join("");
+    function renderBanner() {
+      $("#banner").innerHTML = BANNERS.map((b) => {
+        const p = Products.cached(b.id);
+        return `
+          <a class="banner__item" href="${CATEGORIES[b.cat].page}">
+            ${p ? `<img src="${productImage(p)}" alt="">` : ""}
+            <div class="banner__text">
+              <strong>${b.title.replace("\n", "<br>")}</strong>
+              <span>${b.sub}</span>
+            </div>
+          </a>`;
+      }).join("");
+    }
 
-    $("#sections").innerHTML = Object.entries(CATEGORIES).map(([key, c]) => {
-      const top = PRODUCTS.filter((p) => p.cat === key)
-        .sort((a, b) => b.review - a.review)
-        .slice(0, 5);
-      return `
-        <section class="section">
-          <div class="section__head">
-            <h2 class="section__title">${c.name} 랭킹</h2>
-            <a class="section__more" href="${c.page}">전체보기 &gt;</a>
-          </div>
-          <div class="grid">${top.map((p, i) => productCard(p, i + 1)).join("")}</div>
-        </section>`;
-    }).join("");
+    // 상품 30개를 한 번에 조회해서 카테고리별 랭킹(후기 수 순)을 그림
+    function renderSections(products) {
+      $("#sections").innerHTML = Object.entries(CATEGORIES).map(([key, c]) => {
+        const top = products.filter((p) => p.cat === key).slice(0, 5);
+        return `
+          <section class="section">
+            <div class="section__head">
+              <h2 class="section__title">${c.name} 랭킹</h2>
+              <a class="section__more" href="${c.page}">전체보기 &gt;</a>
+            </div>
+            <div class="grid">${top.map((p, i) => productCard(p, i + 1)).join("")}</div>
+          </section>`;
+      }).join("");
+    }
+
+    renderBanner();
+    withLoading($("#sections"), `<section class="section">${skeletonGrid(5)}</section>`.repeat(3), async () => {
+      const [products] = await Promise.all([Products.list(), App.ready]);
+      renderBanner();
+      renderSections(products);
+    });
   </script>
 </body>
 </html>

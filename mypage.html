@@ -9,12 +9,12 @@
 <body data-category="mypage">
   <header id="header"></header>
 
-  <main class="inner mypage">
+  <main class="inner mypage" id="mypage" hidden>
     <section class="profile">
-      <div class="profile__avatar" aria-hidden="true">G</div>
+      <div class="profile__avatar" aria-hidden="true" id="avatar"></div>
       <div>
-        <strong class="profile__name">게스트 회원님</strong>
-        <p class="profile__note">로그인 없이 이 브라우저에 저장된 정보를 보여드려요.</p>
+        <strong class="profile__name" id="profileName"></strong>
+        <p class="profile__note" id="profileEmail"></p>
       </div>
     </section>
 
@@ -25,6 +25,41 @@
       <div id="orders"></div>
     </section>
 
+    <div class="grid-2" style="margin-top:24px">
+      <section class="box">
+        <div class="box__head">회원 정보</div>
+        <form class="box__body" id="profileForm" novalidate>
+          <div class="form-row"><label for="pName">이름</label><input id="pName" autocomplete="name"></div>
+          <div class="form-row"><label for="pPhone">휴대폰 번호</label><input id="pPhone" inputmode="numeric" autocomplete="tel" placeholder="01012345678"></div>
+          <div class="form-row"><label for="pEmail">이메일</label><input id="pEmail" disabled></div>
+          <button type="submit" class="btn btn--black btn--block">회원 정보 저장</button>
+        </form>
+      </section>
+
+      <section class="box">
+        <div class="box__head">비밀번호 변경</div>
+        <form class="box__body" id="pwForm" novalidate>
+          <div class="form-row"><label for="pw1">새 비밀번호</label><input id="pw1" type="password" autocomplete="new-password" placeholder="8자 이상"></div>
+          <div class="form-row"><label for="pw2">비밀번호 확인</label><input id="pw2" type="password" autocomplete="new-password"></div>
+          <button type="submit" class="btn btn--black btn--block">비밀번호 변경</button>
+        </form>
+      </section>
+    </div>
+
+    <section class="box">
+      <div class="box__head">배송지 관리 <button type="button" class="btn btn--sm" id="addAddrBtn">+ 새 배송지</button></div>
+      <form class="box__body" id="addrForm" hidden novalidate style="border-bottom:1px solid var(--gray-200)">
+        <div class="form-row"><label for="aRecipient">받는 사람</label><input id="aRecipient"></div>
+        <div class="form-row"><label for="aPhone">연락처</label><input id="aPhone" inputmode="numeric" placeholder="01012345678"></div>
+        <div class="form-row"><label for="aZip">우편번호</label><input id="aZip" inputmode="numeric"></div>
+        <div class="form-row"><label for="aAddr1">주소</label><input id="aAddr1"></div>
+        <div class="form-row"><label for="aAddr2">상세 주소</label><input id="aAddr2"></div>
+        <label class="form-check"><input type="checkbox" id="aDefault"> 기본 배송지로 지정</label>
+        <div class="btn-row"><button type="button" class="btn" id="cancelAddr">취소</button><button type="submit" class="btn btn--black">저장</button></div>
+      </form>
+      <ul class="addr-list" id="addresses"></ul>
+    </section>
+
     <section class="section">
       <div class="section__head"><h2 class="section__title">좋아요한 상품</h2><a class="section__more" href="likes.html">전체보기 &gt;</a></div>
       <div id="likes"></div>
@@ -33,32 +68,91 @@
 
   <footer id="footer"></footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.100.0/dist/umd/supabase.js"></script>
+  <script src="js/supabase.js"></script>
   <script src="js/products.js"></script>
   <script src="js/common.js"></script>
   <script>
-    (function () {
-      const PAY_TYPE = { NORMAL: "일반결제", BRANDPAY: "브랜드페이", KEYIN: "키인결제" };
+    (async function () {
+      // 로그인하지 않았으면 로그인 페이지로 (M3 완료 조건)
+      if (!(await Auth.requireLogin())) return;
+      // 이 페이지에서 로그아웃하면 홈으로
+      document.addEventListener("auth:change", (e) => { if (!e.detail.user) location.replace("index.html"); });
+
+      $("#mypage").hidden = false;
+      const STATUS = { paid: "결제 완료", processing: "결제 확인 중", canceled: "결제 취소", failed: "결제 실패" };
       const fmtDate = (iso) => {
         const d = new Date(iso);
         const pad = (n) => String(n).padStart(2, "0");
         return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
       };
+      let orders = [];
+      let addresses = [];
 
+      /* ---------- 회원 정보 (F-207) ---------- */
+      async function loadProfile() {
+        const { data, error } = await sb.from("profiles").select("name, phone").maybeSingle();
+        if (error) throw error;
+        const name = data?.name || Auth.user.email.split("@")[0];
+        $("#avatar").textContent = name.slice(0, 1).toUpperCase();
+        $("#profileName").textContent = `${name} 회원님`;
+        $("#profileEmail").textContent = Auth.user.email;
+        $("#pName").value = data?.name || "";
+        $("#pPhone").value = data?.phone || "";
+        $("#pEmail").value = Auth.user.email;
+      }
+
+      $("#profileForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const name = $("#pName").value.trim();
+        const phone = $("#pPhone").value.replace(/\D/g, "");
+        const phoneOk = !phone || /^01\d{8,9}$/.test(phone);
+        $("#pName").classList.toggle("is-error", !name);
+        $("#pPhone").classList.toggle("is-error", !phoneOk);
+        if (!name || !phoneOk) return toast("이름과 휴대폰 번호를 확인해 주세요");
+        const { error } = await sb.from("profiles").update({ name, phone }).eq("id", Auth.user.id);
+        if (error) return toast("회원 정보를 저장하지 못했어요");
+        toast("회원 정보를 저장했어요");
+        loadProfile().catch(() => {});
+      });
+
+      $("#pwForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const pw = $("#pw1").value;
+        if (pw.length < 8) return toast("비밀번호는 8자 이상으로 입력해 주세요");
+        if (pw !== $("#pw2").value) return toast("비밀번호가 서로 달라요");
+        const { error } = await sb.auth.updateUser({ password: pw });
+        if (error) return toast(error.code === "same_password" ? "이전과 다른 비밀번호를 입력해 주세요" : "비밀번호를 바꾸지 못했어요");
+        e.target.reset();
+        toast("비밀번호를 바꿨어요");
+      });
+
+      /* ---------- 주문 내역 (F-408) ---------- */
       function renderStats() {
-        const orders = Orders.list();
+        const paid = orders.filter((o) => o.status === "paid");
         const stats = [
-          ["주문", orders.length, "#orders"],
+          ["주문", paid.length, "#orders"],
           ["좋아요", Likes.ids().length, "likes.html"],
           ["장바구니", Cart.count(), "cart.html"],
-          ["총 결제 금액", won(orders.reduce((s, o) => s + o.amount, 0)), "#orders"],
+          ["총 결제 금액", won(paid.reduce((s, o) => s + o.total_amount, 0)), "#orders"],
         ];
         $("#stats").innerHTML = stats
           .map(([label, value, href]) => `<li><a href="${href}"><span>${label}</span><strong>${value}</strong></a></li>`)
           .join("");
       }
 
-      function renderOrders() {
-        const orders = Orders.list();
+      async function loadOrders() {
+        // 결제창까지 가지 않은 pending·expired 주문은 숨김
+        const { data, error } = await sb
+          .from("orders")
+          .select("id, order_name, status, total_amount, created_at, paid_at, order_items(product_id, product_name, brand, image_url, size, qty, line_amount, sort_order), payments(method)")
+          .not("status", "in", "(pending,expired)")
+          .order("created_at", { ascending: false })
+          .order("sort_order", { referencedTable: "order_items" })
+          .limit(50);
+        if (error) throw error;
+        orders = data;
+        renderStats();
         if (!orders.length) {
           $("#orders").innerHTML = `<div class="empty" style="padding:60px 0"><strong>주문 내역이 없어요</strong><p>결제를 완료하면 여기에 표시돼요.</p></div>`;
           return;
@@ -66,44 +160,105 @@
         $("#orders").innerHTML = orders.map((o) => `
           <div class="order-card">
             <div class="order-card__head">
-              <span><strong>${fmtDate(o.date)}</strong> · 주문번호 ${o.orderId}</span>
-              <span class="order-card__state">결제 완료</span>
+              <span><strong>${fmtDate(o.paid_at || o.created_at)}</strong> · 주문번호 ${esc(o.id)}</span>
+              <span class="order-card__state order-card__state--${o.status}">${STATUS[o.status] || esc(o.status)}</span>
             </div>
             <ul>
-              ${o.items.map((i) => {
-                const p = getProduct(i.id);
-                if (!p) return "";
-                return `
-                  <li class="order-card__item">
-                    <a class="line-item__img" href="product.html?id=${p.id}"><img src="${productImage(p)}" alt=""></a>
-                    <div>
-                      <p class="line-item__brand">${p.brand}</p>
-                      <p class="line-item__name"><a href="product.html?id=${p.id}">${p.name}</a></p>
-                      <p class="line-item__opt">사이즈 ${i.size} · ${i.qty}개</p>
-                    </div>
-                    <p class="line-item__price">${won(salePrice(p) * i.qty)}</p>
-                  </li>`;
-              }).join("")}
+              ${o.order_items.map((i) => `
+                <li class="order-card__item">
+                  <a class="line-item__img" href="product.html?id=${encodeURIComponent(i.product_id)}"><img src="${esc(i.image_url || "")}" alt=""></a>
+                  <div>
+                    <p class="line-item__brand">${esc(i.brand)}</p>
+                    <p class="line-item__name"><a href="product.html?id=${encodeURIComponent(i.product_id)}">${esc(i.product_name)}</a></p>
+                    <p class="line-item__opt">사이즈 ${esc(i.size)} · ${i.qty}개</p>
+                  </div>
+                  <p class="line-item__price">${won(i.line_amount)}</p>
+                </li>`).join("")}
             </ul>
             <div class="order-card__foot">
-              <span>${PAY_TYPE[o.paymentType] || o.paymentType || "-"}</span>
-              <span>결제 금액 <strong>${won(o.amount)}</strong></span>
+              <span>${esc(o.payments[0]?.method || "-")}</span>
+              <span>결제 금액 <strong>${won(o.total_amount)}</strong></span>
             </div>
           </div>`).join("");
       }
 
-      function renderLikes() {
-        const products = Likes.ids().slice(0, 5).map(getProduct);
+      /* ---------- 배송지 관리 (F-206) ---------- */
+      async function loadAddresses() {
+        const { data, error } = await sb.from("addresses").select("*")
+          .order("is_default", { ascending: false }).order("created_at", { ascending: false });
+        if (error) throw error;
+        addresses = data;
+        $("#addresses").innerHTML = addresses.length
+          ? addresses.map((a) => `
+            <li>
+              <div>
+                <strong>${esc(a.recipient)}</strong>${a.is_default ? `<span class="badge">기본</span>` : ""}
+                <p>${a.zipcode ? `(${esc(a.zipcode)}) ` : ""}${esc(a.address1)} ${esc(a.address2)}</p>
+                <p>${esc(a.phone)}</p>
+              </div>
+              <div class="actions">
+                ${a.is_default ? "" : `<button type="button" class="btn btn--sm" data-default="${a.id}">기본으로</button>`}
+                <button type="button" class="btn btn--sm" data-remove="${a.id}">삭제</button>
+              </div>
+            </li>`).join("")
+          : `<li><p>저장된 배송지가 없어요. 결제할 때 입력한 배송지를 저장할 수도 있어요.</p></li>`;
+      }
+
+      const addrForm = $("#addrForm");
+      $("#addAddrBtn").onclick = () => { addrForm.hidden = false; $("#aDefault").checked = !addresses.length; $("#aRecipient").focus(); };
+      $("#cancelAddr").onclick = () => { addrForm.reset(); addrForm.hidden = true; };
+
+      addrForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        $("#aPhone").value = $("#aPhone").value.replace(/\D/g, "");
+        const row = {
+          user_id: Auth.user.id,
+          recipient: $("#aRecipient").value.trim(),
+          phone: $("#aPhone").value,
+          zipcode: $("#aZip").value.trim(),
+          address1: $("#aAddr1").value.trim(),
+          address2: $("#aAddr2").value.trim(),
+        };
+        const checks = [[$("#aRecipient"), !!row.recipient], [$("#aPhone"), /^01\d{8,9}$/.test(row.phone)], [$("#aAddr1"), !!row.address1]];
+        if (checks.filter(([el, ok]) => { el.classList.toggle("is-error", !ok); return !ok; }).length) return toast("배송지 정보를 확인해 주세요");
+
+        const { data, error } = await sb.from("addresses").insert(row).select("id").single();
+        if (error) return toast("배송지를 저장하지 못했어요");
+        if ($("#aDefault").checked) await sb.rpc("set_default_address", { p_id: data.id });
+        addrForm.reset();
+        addrForm.hidden = true;
+        toast("배송지를 저장했어요");
+        loadAddresses().catch(() => toast("배송지를 불러오지 못했어요"));
+      });
+
+      $("#addresses").addEventListener("click", async (e) => {
+        const { default: setDefault, remove } = e.target.dataset;
+        if (setDefault) {
+          const { error } = await sb.rpc("set_default_address", { p_id: setDefault });
+          toast(error ? "기본 배송지를 바꾸지 못했어요" : "기본 배송지로 지정했어요");
+        } else if (remove) {
+          if (!confirm("이 배송지를 삭제할까요?")) return;
+          const { error } = await sb.from("addresses").delete().eq("id", remove);
+          toast(error ? "배송지를 삭제하지 못했어요" : "배송지를 삭제했어요");
+        } else return;
+        loadAddresses().catch(() => toast("배송지를 불러오지 못했어요"));
+      });
+
+      /* ---------- 좋아요 ---------- */
+      async function renderLikes() {
+        const products = await Products.byIds(Likes.ids().slice(0, 5));
         $("#likes").innerHTML = products.length
           ? `<div class="grid">${products.map((p) => productCard(p)).join("")}</div>`
           : `<div class="empty" style="padding:60px 0"><strong>좋아요한 상품이 없어요</strong><p>상품의 하트를 눌러 관심 상품을 모아보세요.</p></div>`;
       }
 
-      document.addEventListener("likes:change", () => { renderStats(); renderLikes(); });
+      document.addEventListener("likes:change", () => { renderStats(); withLoading($("#likes"), "", renderLikes); });
 
-      renderStats();
-      renderOrders();
-      renderLikes();
+      await App.ready;
+      loadProfile().catch((err) => { console.error(err); toast("회원 정보를 불러오지 못했어요"); });
+      withLoading($("#orders"), `<p class="loading">주문 내역을 불러오는 중...</p>`, loadOrders);
+      withLoading($("#addresses"), `<li><p>불러오는 중...</p></li>`, loadAddresses);
+      withLoading($("#likes"), skeletonGrid(5), renderLikes);
     })();
   </script>
 </body>

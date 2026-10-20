@@ -13,24 +13,34 @@
 
   <footer id="footer"></footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.100.0/dist/umd/supabase.js"></script>
+  <script src="js/supabase.js"></script>
   <script src="js/products.js"></script>
   <script src="js/common.js"></script>
   <script>
-    /* 결제 실패 (failUrl) — ?code=&message=&orderId= 가 붙어서 들어옵니다. */
-    (function () {
+    /* 결제 실패 (failUrl) — ?code=&message=&orderId= 가 붙어서 들어옵니다.
+       만들어 둔 pending 주문을 failed(사용자 취소면 canceled)로 바꿉니다. (F-406) */
+    (async function () {
       const q = new URLSearchParams(location.search);
-      const esc = (s) => String(s || "-").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-      store.remove("moosin_pending_order");
+      const code = q.get("code");
+      const orderId = q.get("orderId");
+      const canceled = code === "PAY_PROCESS_CANCELED";
 
       $("#result").innerHTML = `
         <div class="result__icon result__icon--fail">✕</div>
-        <h1>결제에 실패했어요</h1>
+        <h1>${canceled ? "결제를 취소했어요" : "결제에 실패했어요"}</h1>
         <p>${esc(q.get("message") || "결제가 정상적으로 처리되지 않았습니다.")}</p>
         <dl>
-          <dt>에러 코드</dt><dd>${esc(q.get("code"))}</dd>
-          <dt>주문번호</dt><dd>${esc(q.get("orderId"))}</dd>
+          <dt>에러 코드</dt><dd>${esc(code || "-")}</dd>
+          <dt>주문번호</dt><dd>${esc(orderId || "-")}</dd>
         </dl>
         <div class="btn-row"><a class="btn" href="cart.html">장바구니</a><a class="btn btn--black" href="checkout.html">다시 결제하기</a></div>`;
+
+      if (orderId) {
+        await Auth.ready;
+        const { error } = await sb.rpc("fail_order", { p_order_id: orderId, p_code: code || "UNKNOWN" });
+        if (error) console.error(error);
+      }
     })();
   </script>
 </body>

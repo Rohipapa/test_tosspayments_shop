@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>회원가입 | MOOSIN STORE</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-category="login">
+  <header id="header"></header>
+
+  <main class="inner">
+    <section class="auth">
+      <h1>회원가입</h1>
+      <p>이메일로 간편하게 가입하세요.</p>
+      <form id="signupForm" novalidate>
+        <div class="field"><label for="name">이름</label><input id="name" autocomplete="name" placeholder="홍길동"></div>
+        <div class="field"><label for="phone">휴대폰 번호</label><input id="phone" inputmode="numeric" autocomplete="tel" placeholder="01012345678"></div>
+        <div class="field"><label for="email">이메일</label><input id="email" type="email" autocomplete="email" placeholder="example@email.com"></div>
+        <div class="field"><label for="password">비밀번호</label><input id="password" type="password" autocomplete="new-password" placeholder="8자 이상"></div>
+        <div class="field"><label for="password2">비밀번호 확인</label><input id="password2" type="password" autocomplete="new-password" placeholder="비밀번호를 한 번 더 입력"></div>
+        <p class="form-msg" id="msg" role="alert"></p>
+        <button type="submit" class="btn btn--black btn--block" id="submitBtn">가입하기</button>
+      </form>
+      <div class="auth__links"><span>이미 회원이신가요?</span><a href="login.html" id="loginLink">로그인</a></div>
+    </section>
+  </main>
+
+  <footer id="footer"></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.100.0/dist/umd/supabase.js"></script>
+  <script src="js/supabase.js"></script>
+  <script src="js/products.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    (async function () {
+      const redirect = safeRedirect(new URLSearchParams(location.search).get("redirect"));
+      $("#loginLink").href = `login.html?redirect=${encodeURIComponent(redirect)}`;
+
+      await Auth.ready;
+      if (Auth.user) return location.replace(redirect);
+
+      const msg = $("#msg");
+      const form = $("#signupForm");
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        $("#phone").value = $("#phone").value.replace(/\D/g, "");
+        const v = (id) => $("#" + id).value.trim();
+        const rules = [
+          ["name", v("name").length > 0 && v("name").length <= 50, "이름을 입력해 주세요."],
+          ["phone", /^01\d{8,9}$/.test(v("phone")), "휴대폰 번호를 확인해 주세요."],
+          ["email", /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v("email")), "이메일 주소를 확인해 주세요."],
+          ["password", $("#password").value.length >= 8, "비밀번호는 8자 이상으로 입력해 주세요."],
+          ["password2", $("#password2").value === $("#password").value, "비밀번호가 서로 달라요."],
+        ];
+        const bad = rules.filter(([id, ok]) => { $("#" + id).classList.toggle("is-error", !ok); return !ok; });
+        if (bad.length) {
+          msg.className = "form-msg";
+          msg.textContent = bad[0][2];
+          $("#" + bad[0][0]).focus();
+          return;
+        }
+
+        const btn = $("#submitBtn");
+        btn.disabled = true;
+        btn.textContent = "가입 중...";
+        msg.textContent = "";
+
+        // name, phone은 가입 시 DB trigger(handle_new_user)가 profiles에 저장합니다. (F-204)
+        const { data, error } = await sb.auth.signUp({
+          email: v("email"),
+          password: $("#password").value,
+          options: {
+            data: { name: v("name"), phone: v("phone") },
+            emailRedirectTo: new URL("login.html", location.href).href,
+          },
+        });
+
+        btn.disabled = false;
+        btn.textContent = "가입하기";
+        if (error) {
+          msg.className = "form-msg";
+          msg.textContent =
+            error.code === "user_already_exists" ? "이미 가입된 이메일이에요."
+            : error.code === "weak_password" ? "더 안전한 비밀번호를 입력해 주세요."
+            : error.code === "over_email_send_rate_limit" ? "잠시 후 다시 시도해 주세요."
+            : "가입하지 못했어요. 잠시 후 다시 시도해 주세요.";
+          return;
+        }
+
+        if (data.session) {
+          // 이메일 인증을 끈 경우(D-3): 바로 로그인 상태
+          Auth.user = data.user;
+          await mergeLocalData();
+          toast("가입을 환영해요!");
+          location.replace(redirect);
+        } else {
+          // 이메일 인증을 켠 경우: 확인 메일 안내
+          form.hidden = true;
+          msg.className = "form-msg is-ok";
+          msg.textContent = `${v("email")}로 보낸 확인 메일의 링크를 누르면 가입이 끝나요.`;
+          form.after(msg);
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

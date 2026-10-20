@@ -19,6 +19,8 @@
 
   <footer id="footer"></footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.100.0/dist/umd/supabase.js"></script>
+  <script src="js/supabase.js"></script>
   <script src="js/products.js"></script>
   <script src="js/common.js"></script>
   <script>
@@ -26,7 +28,7 @@
       let filter = "all";
 
       function render() {
-        const products = Likes.ids().map(getProduct);
+        const products = Likes.ids().map((id) => Products.cached(id)).filter(Boolean);
         const shown = filter === "all" ? products : products.filter((p) => p.cat === filter);
 
         $("#likeCount").textContent = `좋아요한 상품 ${products.length}개`;
@@ -49,10 +51,17 @@
         render();
       });
 
-      // 이 페이지에서 하트를 끄면 목록에서 바로 빠지도록 다시 그림
-      document.addEventListener("likes:change", render);
+      // 좋아요한 상품 정보를 한 번에(in 쿼리) 조회
+      const load = async () => {
+        await App.ready;
+        await Products.byIds(Likes.ids());
+        render();
+      };
 
-      render();
+      withLoading($("#likes"), skeletonGrid(5), load);
+
+      // 이 페이지에서 하트를 끄면 목록에서 바로 빠지도록, 로그인 상태가 바뀌면 새 목록으로 다시 그림
+      document.addEventListener("likes:change", (e) => (e.detail?.id ? render() : withLoading($("#likes"), "", load)));
     })();
   </script>
 </body>
