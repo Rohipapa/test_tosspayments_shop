@@ -66,7 +66,8 @@
 
             <div class="total-row"><span>총 상품 금액</span><strong id="total">${won(price)}</strong></div>
 
-            <div class="btn-row">
+            <div class="btn-row btn-row--like">
+              <button type="button" class="btn btn--like ${Likes.has(p.id) ? "is-on" : ""}" data-like="${p.id}" aria-label="좋아요" aria-pressed="${Likes.has(p.id)}">${HEART}</button>
               <button type="button" class="btn" id="addCart">장바구니</button>
               <button type="button" class="btn btn--black" id="buyNow">구매하기</button>
             </div>

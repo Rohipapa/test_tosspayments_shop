@@ -41,7 +41,7 @@ powershell -ExecutionPolicy Bypass -File serve.ps1
 
 ### 상품 이미지
 
-실제 이미지 없이 `productImage(p)`가 상품의 `color`와 카테고리별 `SILHOUETTE` path로 SVG data URI를 만듭니다. 상품 객체에 `img` 필드가 있으면 그 값을 우선 사용합니다.
+상품 사진은 Unsplash 무료 라이선스 사진을 `images.unsplash.com`에서 핫링크합니다. `products.js`의 `PHOTOS`(상품 id → Unsplash 사진 id)를 읽어 각 상품의 `img`에 URL을 넣고, `productImage(p)`는 `img`가 있으면 그 값을 씁니다. `img`가 없을 때만 `color`와 카테고리별 `SILHOUETTE` path로 SVG 플레이스홀더를 그립니다. 사진을 바꿀 때 Unsplash+(`plus.unsplash.com`) 사진은 유료라 쓰면 안 됩니다.
 
 ### 금액 계산
 
@@ -54,7 +54,12 @@ powershell -ExecutionPolicy Bypass -File serve.ps1
 | `moosin_cart` | 장바구니 `[{id, size, qty, checked}]` |
 | `moosin_checkout` | 결제할 상품 `{items, from}`. `from`은 `"cart"` 또는 `"direct"`(바로구매) |
 | `moosin_pending_order` | 결제 요청 직전에 저장한 `{orderId, orderName, amount, items, from}` |
-| `moosin_likes` | 좋아요한 상품 id 배열 |
+| `moosin_likes` | 좋아요한 상품 id 배열(최근 것이 앞) |
+| `moosin_orders` | 결제 성공 시 `success.html`이 저장하는 주문 내역(최대 50건). `mypage.html`에서 표시 |
+
+### 좋아요와 마이페이지
+
+로그인 없이 localStorage만 씁니다. 하트 버튼(`[data-like]`) 클릭은 `common.js`의 전역 핸들러가 처리합니다. 같은 상품의 하트를 모두 동기화하고, 헤더 배지(`#likeBadge`)를 갱신한 뒤 `likes:change` 이벤트를 보냅니다. `likes.html`과 `mypage.html`은 이 이벤트를 받아 목록을 다시 그립니다. 헤더 유틸 링크의 활성 표시는 `data-category="likes"`/`"mypage"`/`"cart"`로 정해집니다.
 
 1. `product.html`(바로구매) 또는 `cart.html`(선택 상품 주문)이 `Checkout.set()`을 호출한 뒤 `checkout.html`로 이동합니다.
 2. `js/checkout.js`가 `widgets.setAmount()` → `renderPaymentMethods()`/`renderAgreement()` 순서로 위젯을 띄우고, 결제 버튼을 누르면 `moosin_pending_order`를 저장한 뒤 `requestPayment()`를 호출합니다. 금액을 바꿀 때는 렌더링 전에 반드시 `setAmount()`를 다시 호출해야 합니다.

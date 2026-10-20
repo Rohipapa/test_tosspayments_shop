@@ -62,13 +62,26 @@ function calcTotals(items) {
 /* ---------- 좋아요 ---------- */
 const Likes = {
   KEY: "moosin_likes",
-  has(id) { return store.get(this.KEY, []).includes(id); },
+  ids() { return store.get(this.KEY, []).filter((id) => getProduct(id)); },
+  has(id) { return this.ids().includes(id); },
   toggle(id) {
-    const list = store.get(this.KEY, []);
+    const list = this.ids();
     const i = list.indexOf(id);
-    i >= 0 ? list.splice(i, 1) : list.push(id);
+    // 최근에 누른 상품이 앞에 오도록 저장
+    i >= 0 ? list.splice(i, 1) : list.unshift(id);
     store.set(this.KEY, list);
     return i < 0;
+  },
+};
+
+/* ---------- 주문 내역 (결제 성공 시 success.html 에서 저장) ---------- */
+const Orders = {
+  KEY: "moosin_orders",
+  list() { return store.get(this.KEY, []); },
+  add(order) {
+    const list = this.list().filter((o) => o.orderId !== order.orderId);
+    list.unshift(order);
+    store.set(this.KEY, list.slice(0, 50));
   },
 };
 
@@ -82,7 +95,7 @@ function productCard(p, rank) {
       <div class="card__thumb">
         <img src="${productImage(p)}" alt="${p.name}" loading="lazy">
         ${rank ? `<span class="card__rank">${rank}</span>` : ""}
-        <button type="button" class="card__like ${like ? "is-on" : ""}" data-like="${p.id}" aria-label="좋아요">${HEART}</button>
+        <button type="button" class="card__like ${like ? "is-on" : ""}" data-like="${p.id}" aria-label="좋아요" aria-pressed="${like}">${HEART}</button>
       </div>
       <div class="card__info">
         <p class="card__brand">${p.brand}</p>
@@ -98,9 +111,16 @@ document.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-like]");
   if (!btn) return;
   e.preventDefault();
-  const on = Likes.toggle(btn.dataset.like);
-  btn.classList.toggle("is-on", on);
+  const id = btn.dataset.like;
+  const on = Likes.toggle(id);
+  // 같은 상품의 하트가 페이지에 여러 개 있을 수 있으니 모두 맞춰 줌
+  $$(`[data-like="${id}"]`).forEach((b) => {
+    b.classList.toggle("is-on", on);
+    b.setAttribute("aria-pressed", on);
+  });
+  updateLikeBadge();
   toast(on ? "좋아요 목록에 추가했어요" : "좋아요를 취소했어요");
+  document.dispatchEvent(new CustomEvent("likes:change", { detail: { id, on } }));
 });
 
 /* ---------- 토스트 ---------- */
@@ -132,9 +152,9 @@ function renderHeader() {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       </form>
       <nav class="header__util">
-        <a href="#" class="hide-m">좋아요</a>
-        <a href="#" class="hide-m">마이페이지</a>
-        <a href="cart.html">장바구니 <span class="cart-badge" id="cartBadge">0</span></a>
+        <a href="likes.html" class="hide-m ${active === "likes" ? "is-active" : ""}">좋아요 <span class="cart-badge" id="likeBadge">0</span></a>
+        <a href="mypage.html" class="${active === "mypage" ? "is-active" : ""}">마이페이지</a>
+        <a href="cart.html" class="${active === "cart" ? "is-active" : ""}">장바구니 <span class="cart-badge" id="cartBadge">0</span></a>
       </nav>
     </div>
     <nav class="gnb">
@@ -147,6 +167,7 @@ function renderHeader() {
       </ul>
     </nav>`;
   updateCartBadge();
+  updateLikeBadge();
 }
 
 function renderFooter() {
@@ -156,7 +177,7 @@ function renderFooter() {
   el.innerHTML = `
     <div class="inner">
       <strong>MOOSIN STORE</strong>
-      <p>퍼블리싱 샘플 페이지입니다. 상품 정보와 이미지는 모두 더미 데이터입니다.</p>
+      <p>퍼블리싱 샘플 페이지입니다. 상품 정보는 더미 데이터이고, 상품 사진은 <a href="https://unsplash.com/license" target="_blank" rel="noopener" style="text-decoration:underline">Unsplash 무료 라이선스</a> 사진입니다.</p>
       <p>결제는 토스페이먼츠 테스트 모드로 동작하며 실제 금액이 청구되지 않습니다.</p>
       <p>© MOOSIN STORE. All rights reserved.</p>
     </div>`;
@@ -165,6 +186,11 @@ function renderFooter() {
 function updateCartBadge() {
   const b = $("#cartBadge");
   if (b) b.textContent = Cart.count();
+}
+
+function updateLikeBadge() {
+  const b = $("#likeBadge");
+  if (b) b.textContent = Likes.ids().length;
 }
 
 document.addEventListener("DOMContentLoaded", () => {

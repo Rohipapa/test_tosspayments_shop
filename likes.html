@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>좋아요 | MOOSIN STORE</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-category="likes">
+  <header id="header"></header>
+
+  <main class="inner">
+    <div class="page-head"><h1>좋아요</h1><p id="likeCount"></p></div>
+    <div class="toolbar">
+      <div class="chips" id="chips"></div>
+    </div>
+    <div id="likes"></div>
+  </main>
+
+  <footer id="footer"></footer>
+
+  <script src="js/products.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    (function () {
+      let filter = "all";
+
+      function render() {
+        const products = Likes.ids().map(getProduct);
+        const shown = filter === "all" ? products : products.filter((p) => p.cat === filter);
+
+        $("#likeCount").textContent = `좋아요한 상품 ${products.length}개`;
+        $("#chips").innerHTML = [["all", "전체"], ...Object.entries(CATEGORIES).map(([k, c]) => [k, c.name])]
+          .map(([k, name]) => {
+            const n = k === "all" ? products.length : products.filter((p) => p.cat === k).length;
+            return `<button type="button" class="chip ${filter === k ? "is-active" : ""}" data-filter="${k}">${name} ${n}</button>`;
+          })
+          .join("");
+
+        $("#likes").innerHTML = shown.length
+          ? `<div class="grid">${shown.map((p) => productCard(p)).join("")}</div>`
+          : `<div class="empty"><strong>좋아요한 상품이 없어요</strong><p>상품의 하트를 눌러 관심 상품을 모아보세요.</p><a class="btn btn--black" href="index.html">쇼핑하러 가기</a></div>`;
+      }
+
+      $("#chips").addEventListener("click", (e) => {
+        const b = e.target.closest("[data-filter]");
+        if (!b) return;
+        filter = b.dataset.filter;
+        render();
+      });
+
+      // 이 페이지에서 하트를 끄면 목록에서 바로 빠지도록 다시 그림
+      document.addEventListener("likes:change", render);
+
+      render();
+    })();
+  </script>
+</body>
+</html>

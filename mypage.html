@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>마이페이지 | MOOSIN STORE</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-category="mypage">
+  <header id="header"></header>
+
+  <main class="inner mypage">
+    <section class="profile">
+      <div class="profile__avatar" aria-hidden="true">G</div>
+      <div>
+        <strong class="profile__name">게스트 회원님</strong>
+        <p class="profile__note">로그인 없이 이 브라우저에 저장된 정보를 보여드려요.</p>
+      </div>
+    </section>
+
+    <ul class="stats" id="stats"></ul>
+
+    <section class="box">
+      <div class="box__head">주문 내역</div>
+      <div id="orders"></div>
+    </section>
+
+    <section class="section">
+      <div class="section__head"><h2 class="section__title">좋아요한 상품</h2><a class="section__more" href="likes.html">전체보기 &gt;</a></div>
+      <div id="likes"></div>
+    </section>
+  </main>
+
+  <footer id="footer"></footer>
+
+  <script src="js/products.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    (function () {
+      const PAY_TYPE = { NORMAL: "일반결제", BRANDPAY: "브랜드페이", KEYIN: "키인결제" };
+      const fmtDate = (iso) => {
+        const d = new Date(iso);
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      };
+
+      function renderStats() {
+        const orders = Orders.list();
+        const stats = [
+          ["주문", orders.length, "#orders"],
+          ["좋아요", Likes.ids().length, "likes.html"],
+          ["장바구니", Cart.count(), "cart.html"],
+          ["총 결제 금액", won(orders.reduce((s, o) => s + o.amount, 0)), "#orders"],
+        ];
+        $("#stats").innerHTML = stats
+          .map(([label, value, href]) => `<li><a href="${href}"><span>${label}</span><strong>${value}</strong></a></li>`)
+          .join("");
+      }
+
+      function renderOrders() {
+        const orders = Orders.list();
+        if (!orders.length) {
+          $("#orders").innerHTML = `<div class="empty" style="padding:60px 0"><strong>주문 내역이 없어요</strong><p>결제를 완료하면 여기에 표시돼요.</p></div>`;
+          return;
+        }
+        $("#orders").innerHTML = orders.map((o) => `
+          <div class="order-card">
+            <div class="order-card__head">
+              <span><strong>${fmtDate(o.date)}</strong> · 주문번호 ${o.orderId}</span>
+              <span class="order-card__state">결제 완료</span>
+            </div>
+            <ul>
+              ${o.items.map((i) => {
+                const p = getProduct(i.id);
+                if (!p) return "";
+                return `
+                  <li class="order-card__item">
+                    <a class="line-item__img" href="product.html?id=${p.id}"><img src="${productImage(p)}" alt=""></a>
+                    <div>
+                      <p class="line-item__brand">${p.brand}</p>
+                      <p class="line-item__name"><a href="product.html?id=${p.id}">${p.name}</a></p>
+                      <p class="line-item__opt">사이즈 ${i.size} · ${i.qty}개</p>
+                    </div>
+                    <p class="line-item__price">${won(salePrice(p) * i.qty)}</p>
+                  </li>`;
+              }).join("")}
+            </ul>
+            <div class="order-card__foot">
+              <span>${PAY_TYPE[o.paymentType] || o.paymentType || "-"}</span>
+              <span>결제 금액 <strong>${won(o.amount)}</strong></span>
+            </div>
+          </div>`).join("");
+      }
+
+      function renderLikes() {
+        const products = Likes.ids().slice(0, 5).map(getProduct);
+        $("#likes").innerHTML = products.length
+          ? `<div class="grid">${products.map((p) => productCard(p)).join("")}</div>`
+          : `<div class="empty" style="padding:60px 0"><strong>좋아요한 상품이 없어요</strong><p>상품의 하트를 눌러 관심 상품을 모아보세요.</p></div>`;
+      }
+
+      document.addEventListener("likes:change", () => { renderStats(); renderLikes(); });
+
+      renderStats();
+      renderOrders();
+      renderLikes();
+    })();
+  </script>
+</body>
+</html>
